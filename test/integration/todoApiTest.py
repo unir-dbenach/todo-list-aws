@@ -23,7 +23,7 @@ class TestApi(unittest.TestCase):
         print('---------------------------------------')
         print('Starting - integration test List TODO')
         #Add TODO
-        url = BASE_URL+"/todos"
+        url = BASE_URL+"a/todos"
         data = {
          "text": "Integration text example"
         }
