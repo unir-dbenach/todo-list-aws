@@ -6,7 +6,6 @@ import todoList
 def list(event, context):
     # fetch all todos from the database
     result = todoList.get_items()
-    password = "HolaComoEstas"                                                                                                           
     # create a response
     response = {
         "statusCode": 200,
