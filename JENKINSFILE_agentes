@@ -25,7 +25,9 @@ pipeline {
                 git branch: 'master', credentialsId: 'GitHubRW', url: 'https://github.com/unir-dbenach/todo-list-aws.git'
 
                 echo "Bajo la configuración del deloy:"
-                wget https://github.com/unir-dbenach/todo-list-aws-config/blob/production/samconfig.toml
+                sh '''
+                    wget https://raw.githubusercontent.com/unir-dbenach/todo-list-aws-config/refs/heads/production/samconfig.toml
+                '''
             
                 echo "Ejecuto los stash para poder pasar los ficheros necesarios a los agentes:"
                 stash includes: 'src/**', name: 'code'                                      // Contiene el código de la aplicación
