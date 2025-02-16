@@ -25,7 +25,9 @@ pipeline {
                 git branch: 'develop', credentialsId: 'GitHubRW', url: 'https://github.com/unir-dbenach/todo-list-aws.git'
             
                 echo "Bajo la configuración del deloy:"
-                wget https://github.com/unir-dbenach/todo-list-aws-config/blob/staging/samconfig.toml
+                sh '''
+                    wget https://github.com/unir-dbenach/todo-list-aws-config/blob/staging/samconfig.toml
+                '''
 
                 echo "Ejecuto los stash para poder pasar los ficheros necesarios a los agentes:"
                 stash includes: '**', name: 'allBranch', useDefaultExcludes: false          // Contiene toda la rama
