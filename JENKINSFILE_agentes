@@ -1,0 +1,203 @@
+pipeline {
+    options {
+        skipDefaultCheckout true
+    }
+    environment {
+        baseURL = ""  // Inicializamos la variable que va a contener la URL de acceso a la API
+    }
+    agent any
+    stages {
+        stage('GetCode') {
+            agent { label 'deploy' }
+            steps {
+                echo "Limpio el workspace:"
+                cleanWs()
+
+                echo "Datos de ejecución en el stage ${env.STAGE_NAME}:"
+                echo "${WORKSPACE}"
+                sh '''
+                    echo "whoami: "`whoami`
+                    echo "hostname: "`hostname`
+                    echo "pwd: "`pwd`
+                '''
+
+                echo "Bajo el código del depósito de GitHub:"
+                git branch: 'develop', credentialsId: 'GitHubRW', url: 'https://github.com/unir-dbenach/todo-list-aws.git'
+            
+                echo "Ejecuto los stash para poder pasar los ficheros necesarios a los agentes:"
+                stash includes: '**', name: 'allBranch', useDefaultExcludes: false          // Contiene toda la rama
+                stash includes: 'src/**', name: 'code'                                      // Contiene el código de la aplicación
+                stash includes: 'test/integration/todoApiTest.py', name: 'restTest'         // Contiene el fichero de pruebas para rest.
+                stash includes: 'pytest.ini', name: 'pytestIni'                             // Contiene el pytest.ini, necesario para el test de rest al definir markers
+                stash includes: 'samconfig.toml', name: 'samConfig'                         // Contiene la configuración de deploymen
+                stash includes: 'template.yaml', name: 'templateAWS'                        // Contiene la plantilla de servicios a desplegar
+                stash includes: 'localEnvironment.json', name: 'localEnv'                   // Contiene la configuracion de acceso a la base de datos
+                
+                echo "Limpio el workspace al final de la ejecución del stage"
+                cleanWs()
+            }
+        }
+        
+        stage ('StaticTest') {
+            agent { label 'staticTest' }
+            steps {
+                echo "Limpio el workspace:"
+                cleanWs()
+
+                echo "Datos de ejecución en el stage ${env.STAGE_NAME}:"
+                echo "${WORKSPACE}"
+                sh '''
+                    echo "whoami: "`whoami`
+                    echo "hostname: "`hostname`
+                    echo "pwd: "`pwd`
+                '''
+                
+                echo "Recupero los ficheros de código necesarios:"
+                unstash 'code'      // Solo necesito el código de la aplicación.
+
+                echo "Lanzo las pruebas de cógigo estático:"
+                sh '''
+                    python3 -m flake8 --exit-zero --format=pylint src > flake8.out
+                '''
+                recordIssues enabledForFailure: true, tools: [flake8(name: 'Flake8', pattern: 'flake8.out')]
+                
+                echo "Lanzo las pruebas de seguridad:"
+                sh '''
+                   python3 -m bandit --exit-zero  -r src -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
+                '''
+                recordIssues enabledForFailure: true, tools: [pyLint(name: 'Bandit', pattern: 'bandit.out')]
+            
+                echo "Limpio el workspace al final de la ejecución del stage"
+                cleanWs()
+            }
+        }
+
+        stage ('Deploy') {
+            agent { label 'deploy' }
+            steps {
+                echo "Limpio el workspace:"
+                cleanWs()
+
+                echo "Datos de ejecución en el stage ${env.STAGE_NAME}:"
+                echo "${WORKSPACE}"
+                sh '''
+                    echo "whoami: "`whoami`
+                    echo "hostname: "`hostname`
+                    echo "pwd: "`pwd`
+                '''
+
+                echo "Recupero los ficheros de código necesarios:"
+                unstash 'code'        // Necesito el código de la aplicación.
+                unstash 'samConfig'   // Necesito la configuración de deploy
+                unstash 'templateAWS' // Necesito la configuración de servicios a desplegar
+                
+                echo "Hago el despliegue en AWS"
+                sh '''
+                    sam build
+                    sam deploy --config-env staging --config-file samconfig.toml --on-failure ROLLBACK --resolve-s3 | tee samDeploy.log
+                '''
+                echo "Recupero la URL por donde se publica el servicio:"
+                script {
+                    baseURL = sh(script: '''
+                        grep "amazonaws.com/" samDeploy.log | head -1 | awk '{print $2}'
+                    ''', returnStdout: true).trim()
+                }
+                
+                echo "Limpio el workspace al final de la ejecución del stage"
+                cleanWs()
+            }
+        }
+        
+        stage ('RestTest') {
+            agent { label 'restTest' }
+            steps {
+                echo "Limpio el workspace:"
+                cleanWs()
+
+                echo "Datos de ejecución en el stage ${env.STAGE_NAME}:"
+                echo "${WORKSPACE}"
+                sh '''
+                    echo "whoami: "`whoami`
+                    echo "hostname: "`hostname`
+                    echo "pwd: "`pwd`
+                '''
+
+                echo "Recupero los ficheros de código necesarios:"
+                unstash 'pytestIni'      // Necesito el fichero de configuración de pytest.
+                unstash 'restTest'      // Necesito el fichero que define los tests a realizar
+                
+                echo "Lanzamos las pruebas de integración."
+                sh """
+                    export PYTHONPATH=${WORKSPACE}
+                    export BASE_URL=${baseURL}
+                    pytest --junit-xml=result-rest.xml test/integration/*
+                """
+                junit 'result-rest.xml'
+                
+                echo "Limpio el workspace al final de la ejecución del stage"
+                cleanWs()
+            }
+        }
+        
+        stage ('Promote') {
+            agent { label 'deploy' }
+            steps {
+                echo "Limpio el workspace:"
+                cleanWs()
+
+                echo "Datos de ejecución en el stage ${env.STAGE_NAME}:"
+                echo "${WORKSPACE}"
+                sh '''
+                    echo "whoami: "`whoami`
+                    echo "hostname: "`hostname`
+                    echo "pwd: "`pwd`
+                '''
+                echo "Recupero los ficheros de código necesarios:"
+                unstash 'allBranch'      // Necesito todos los ficheros de la rama (no sé cuales han cambiado)
+                
+                echo "Hago el merge a master:"
+                withCredentials([usernamePassword(credentialsId: 'GitHubRW', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                    sh '''
+                          git config --global user.email "davidbenach@yahoo.es"
+                          git config --global user.name "dbenach"
+                          git checkout master
+                          git merge develop
+                          git push https://${GIT_USER}:${GIT_PASS}@github.com/unir-dbenach/todo-list-aws.git master
+                    '''
+                
+                echo "Limpio el workspace al final de la ejecución del stage"
+                cleanWs()
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                echo "Ejecuto el post para limpiar la ejecución del pipeline (esta sección se ejecuta siempre aunque el build se marque como fallido):"
+                echo "Elimino el stack de staging."
+                
+                echo "Recupero los ficheros de código necesarios:"
+                unstash 'samConfig' // Necesito la configuración de deploy
+                
+                sh '''
+                    sam delete --config-env staging --config-file samconfig.toml --no-prompts
+                '''
+                echo "Limpio los workspaces."
+                node( 'Agente1') {
+                    echo "Limpio el workspace del agente1"
+                    deleteDir()
+                }
+                node( 'Agente2') {
+                    echo "Limpio el workspace del agente2"
+                    deleteDir()
+                }
+                node( 'Agente3') {
+                    echo "Limpio el workspace del agente3"
+                    deleteDir()
+                }
+            }
+        }
+    }
+}
