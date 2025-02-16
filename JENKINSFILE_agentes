@@ -165,6 +165,7 @@ pipeline {
                           git config --global user.email "davidbenach@yahoo.es"
                           git config --global user.name "dbenach"
                           git checkout master
+                          git config --global merge.ours.driver true
                           git merge develop
                           git push https://${GIT_USER}:${GIT_PASS}@github.com/unir-dbenach/todo-list-aws.git master
                     '''
