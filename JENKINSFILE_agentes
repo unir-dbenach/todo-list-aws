@@ -26,7 +26,7 @@ pipeline {
             
                 echo "Bajo la configuración del deloy:"
                 sh '''
-                    wget https://github.com/unir-dbenach/todo-list-aws-config/blob/staging/samconfig.toml
+                    wget https://raw.githubusercontent.com/unir-dbenach/todo-list-aws-config/refs/heads/staging/samconfig.toml
                 '''
 
                 echo "Ejecuto los stash para poder pasar los ficheros necesarios a los agentes:"
