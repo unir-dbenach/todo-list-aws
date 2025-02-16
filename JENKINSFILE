@@ -12,32 +12,16 @@ pipeline {
                 echo "Limpio el workspace:"
                 cleanWs()
                 echo "Bajo el código del depósito de GitHub:"
-                git branch: 'develop', credentialsId: 'GitHubRW', url: 'https://github.com/unir-dbenach/todo-list-aws.git'
+                git branch: 'master', credentialsId: 'GitHubRW', url: 'https://github.com/unir-dbenach/todo-list-aws.git'
             }
         }
         
-        stage ('StaticTest') {
-            steps {
-                echo "Lanzo las pruebas de cógigo estático:"
-                sh '''
-                    python3 -m flake8 --exit-zero --format=pylint src > flake8.out
-                '''
-                recordIssues enabledForFailure: true, tools: [flake8(name: 'Flake8', pattern: 'flake8.out')]
-                
-                echo "Lanzo las pruebas de seguridad:"
-                sh '''
-                   python3 -m bandit --exit-zero  -r src -f custom -o bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
-                '''
-                recordIssues enabledForFailure: true, tools: [pyLint(name: 'Bandit', pattern: 'bandit.out')]
-            }
-        }
-
         stage ('Deploy') {
             steps {
                 echo "Hago el despliegue en AWS"
                 sh '''
                     sam build
-                    sam deploy --config-env staging --config-file samconfig.toml --on-failure ROLLBACK --resolve-s3 | tee samDeploy.log
+                    sam deploy --config-env production --config-file samconfig.toml --on-failure ROLLBACK --resolve-s3 | tee samDeploy.log
                 '''
                 echo "Recupero la URL por donde se publica el servicio:"
                 script {
@@ -54,24 +38,12 @@ pipeline {
                 sh """
                     export PYTHONPATH=${WORKSPACE}
                     export BASE_URL=${baseURL}
-                    pytest --junit-xml=result-rest.xml test/integration/*
+                    pytest -m inocuo --junit-xml=result-rest.xml test/integration/*
                 """
                junit 'result-rest.xml'
             }
         }
         
-        stage ('Promote') {
-            steps {
-                echo "Hago el merge a master:"
-                withCredentials([usernamePassword(credentialsId: 'GitHubRW', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
-                    sh '''
-                        git checkout master
-                        git merge develop
-                        git push https://${GIT_USER}:${GIT_PASS}@github.com/unir-dbenach/todo-list-aws.git master
-                    '''
-                }
-            }
-        }
     }
 
     post {
@@ -80,7 +52,7 @@ pipeline {
                 echo "Ejecuto el post para limpiar la ejecución del pipeline (esta sección se ejecuta siempre aunque el build se marque como fallido):"
                 echo "Elimino el stack de staging."
                 sh '''
-                    sam delete --config-env staging --config-file samconfig.toml --no-prompts
+                    sam delete --config-env production --config-file samconfig.toml --no-prompts
                 '''
                 echo "Limpio el workspace."
                 deleteDir()
