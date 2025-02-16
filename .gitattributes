@@ -1,3 +1,2 @@
 JENKINSFILE merge=ours
-JENKINSFILE_AGENTES merge=ours
-samconfig.toml merge=ours
+JENKINSFILE_agentes merge=ours
