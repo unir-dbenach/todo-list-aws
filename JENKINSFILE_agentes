@@ -23,16 +23,17 @@ pipeline {
 
                 echo "Bajo el código del depósito de GitHub:"
                 git branch: 'master', credentialsId: 'GitHubRW', url: 'https://github.com/unir-dbenach/todo-list-aws.git'
+
+                echo "Bajo la configuración del deloy:"
+                wget https://github.com/unir-dbenach/todo-list-aws-config/blob/production/samconfig.toml
             
                 echo "Ejecuto los stash para poder pasar los ficheros necesarios a los agentes:"
-                stash includes: '**', name: 'allBranch', useDefaultExcludes: false          // Contiene toda la rama
                 stash includes: 'src/**', name: 'code'                                      // Contiene el código de la aplicación
                 stash includes: 'test/integration/todoApiTest.py', name: 'restTest'         // Contiene el fichero de pruebas para rest.
                 stash includes: 'pytest.ini', name: 'pytestIni'                             // Contiene el pytest.ini, necesario para el test de rest al definir markers
                 stash includes: 'samconfig.toml', name: 'samConfig'                         // Contiene la configuración de deploymen
                 stash includes: 'template.yaml', name: 'templateAWS'                        // Contiene la plantilla de servicios a desplegar
-                stash includes: 'localEnvironment.json', name: 'localEnv'                   // Contiene la configuracion de acceso a la base de datos
-                
+                                
                 echo "Limpio el workspace al final de la ejecución del stage"
                 cleanWs()
             }
