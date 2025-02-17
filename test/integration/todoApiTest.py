@@ -49,10 +49,12 @@ class TestApi(unittest.TestCase):
         )
         self.assertTrue(response.json())
         #Delete TODO to restore state
+        url = url+"/"+ID_TODO
         response = requests.delete(url)
         self.assertEqual(
             response.status_code, 200, "Error en la petición API a {url}"
         )
+
         print('End - integration test List TODO')
 
     def test_api_addtodo(self):
