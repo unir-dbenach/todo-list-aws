@@ -99,7 +99,7 @@ pipeline {
                 sh """
                     export PYTHONPATH=${WORKSPACE}
                     export BASE_URL=${baseURL}
-                    pytest -m inocuo --junit-xml=result-rest.xml test/integration/*
+                    pytest -v -m inocuo --junit-xml=result-rest.xml test/integration/*
                 """
                 junit 'result-rest.xml'
                 
