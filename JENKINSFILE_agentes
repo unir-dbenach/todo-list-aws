@@ -134,7 +134,7 @@ pipeline {
                 sh """
                     export PYTHONPATH=${WORKSPACE}
                     export BASE_URL=${baseURL}
-                    pytest --junit-xml=result-rest.xml test/integration/*
+                    pytest -v --junit-xml=result-rest.xml test/integration/*
                 """
                 junit 'result-rest.xml'
                 
